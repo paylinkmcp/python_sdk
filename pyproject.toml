@@ -1,0 +1,53 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "paylink"
+version = "0.1.3"
+description = "Python SDK for interacting with PayLink MCP servers"
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [
+    { name = "PayLink", email = "paylinkmcp@gmail.com" },
+]
+maintainers = [
+    { name = "PayLink", email = "paylinkmcp@gmail.com" },
+]
+keywords = ["paylink", "mcp", "payment", "sdk", "kenya", "mpesa"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Office/Business :: Financial",
+]
+requires-python = ">=3.10"
+dependencies = [
+    "hatch>=1.14.1",
+    "mcp[cli]>=1.13.1",
+    "twine>=6.2.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/yourusername/paylink"
+Repository = "https://github.com/yourusername/paylink"
+Documentation = "https://github.com/yourusername/paylink#readme"
+"Bug Tracker" = "https://github.com/yourusername/paylink/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["paylink"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/paylink",
+    "/examples",
+    "/README.md",
+    "/LICENSE",
+    "/pyproject.toml",
+]
