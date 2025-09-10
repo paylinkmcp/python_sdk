@@ -1,14 +1,9 @@
 # PayLink Python SDK
 
-using y.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://python.org)
 
-## Features
-
-- 🚀 Easy-to-use Python SDK for PayLink MCP servers
-- 📱 M-Pesa STK Push integration
-- 🔧 Tool discovery and execution
-- ⚡ Async/await support
-- 🛡️ Type hints for better development experience
+Python SDK for PayLink - AI-Powered Payment Integration Framework
 
 ## Installation
 
