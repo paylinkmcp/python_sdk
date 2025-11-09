@@ -11,32 +11,63 @@ Python SDK for PayLink - AI-Powered Payment Integration Framework
 pip install paylink
 ```
 
+### Installing from the local repository (editable)
+
+If you're working on the SDK and want downstream projects to pick up changes automatically:
+
+```bash
+pip install -e /Users/jameskanyiri/PAYLINK/python_sdk
+```
+
+When using a virtual environment, make sure it is activated before running the command. Any edits made to the SDK will be immediately reflected in the projects where it is installed in editable mode.
+
+If you are using [uv](https://github.com/astral-sh/uv), the equivalent command is:
+
+```bash
+uv pip install --editable /Users/jameskanyiri/PAYLINK/python_sdk
+```
+
 ## Quick Start
 
 ```python
 import asyncio
-from paylink import PayLink
+from paylink import MpesaTools, McpMonitizationAdapter
 
-async def main():
-    # Initialize the PayLink client
-    client = PayLink(base_url="http://your-paylink-server:5002/mcp")
 
-    # List available tools
+async def use_mpesa_tools():
+    # Preserves the original PayLink behaviour (defaults to localhost MCP URL)
+    client = MpesaTools()
     tools = await client.list_tools()
-    print("Available tools:", tools)
+    print("Available M-Pesa tools:", tools)
 
-    # Call a tool (e.g., STK Push)
     if "stk_push" in tools:
-        result = await client.call_tool("stk_push", {
-            "amount": "100",
-            "phone_number": "254712345678",
-            "account_reference": "ORDER123",
-            "transaction_desc": "Payment"
-        })
+        result = await client.call_tool(
+            "stk_push",
+            {
+                "amount": "100",
+                "phone_number": "254712345678",
+                "account_reference": "ORDER123",
+                "transaction_desc": "Payment",
+            },
+        )
         print("Payment result:", result)
 
+
+async def use_custom_mcp_adapter():
+    # Requires the caller to provide a concrete MCP server URL as well as
+    # wallet and transport configuration. The wallet connection string will be
+    # forwarded as a request header (`WALLET_CONNECTION_STRING`).
+    adapter = McpMonitizationAdapter(
+        mcp_server_url="https://your-mcp-server.example.com/mcp",
+        wallet_connection_string="postgresql://wallet-user:secret@db/wallet",
+        transport="grpc",
+    )
+    print("Custom MCP tools:", await adapter.list_tools())
+
+
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(use_mpesa_tools())
+    asyncio.run(use_custom_mcp_adapter())
 ```
 
 ## API Reference
@@ -78,19 +109,24 @@ Call a specific tool exposed by the MCP server.
 
 ```python
 import asyncio
-from paylink import PayLink
+from paylink import MpesaTools
+
 
 async def stk_push_example():
-    client = PayLink(base_url="http://your-server:5002/mcp")
+    client = MpesaTools(base_url="http://your-server:5002/mcp")
 
-    result = await client.call_tool("stk_push", {
-        "amount": "100",
-        "phone_number": "254712345678",
-        "account_reference": "ORDER123",
-        "transaction_desc": "Test Payment"
-    })
+    result = await client.call_tool(
+        "stk_push",
+        {
+            "amount": "100",
+            "phone_number": "254712345678",
+            "account_reference": "ORDER123",
+            "transaction_desc": "Test Payment",
+        },
+    )
 
     print(f"Payment initiated: {result}")
+
 
 asyncio.run(stk_push_example())
 ```
@@ -99,14 +135,20 @@ asyncio.run(stk_push_example())
 
 ```python
 import asyncio
-from paylink import PayLink
+from paylink import McpMonitizationAdapter
+
 
 async def list_tools_example():
-    client = PayLink(base_url="http://your-server:5002/mcp")
-    tools = await client.list_tools()
+    adapter = McpMonitizationAdapter(
+        mcp_server_url="https://your-mcp-server.example.com/mcp",
+        wallet_connection_string="postgresql://wallet-user:secret@db/wallet",
+        transport="grpc",
+    )
+    tools = await adapter.list_tools()
 
     for tool in tools:
         print(f"Available tool: {tool}")
+
 
 asyncio.run(list_tools_example())
 ```
