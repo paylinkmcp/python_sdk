@@ -14,7 +14,7 @@ class MpesaTools(PayLink):
 
     def __init__(
         self,
-        base_url: str = "http://0.0.0.0:5002/mcp",
+        base_url: str = "http://3.107.114.80:5002/mcp",
         api_key: Optional[str] = None,
         tracing: Optional[str] = None,
         project: Optional[str] = None,

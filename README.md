@@ -35,7 +35,7 @@ from paylink import MpesaTools, McpMonitizationAdapter
 
 
 async def use_mpesa_tools():
-    # Preserves the original PayLink behaviour (defaults to localhost MCP URL)
+    # Uses default PayLink MCP server URL
     client = MpesaTools()
     tools = await client.list_tools()
     print("Available M-Pesa tools:", tools)
@@ -74,7 +74,7 @@ if __name__ == "__main__":
 
 ### PayLink Class
 
-#### `__init__(base_url: str = "http://0.0.0.0:5002/mcp")`
+#### `__init__(base_url: str = "http://3.107.114.80:5002/mcp")`
 
 Initialize the PayLink client.
 
