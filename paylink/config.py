@@ -1,7 +1,3 @@
-"""
-Configuration helpers for the PayLink SDK.
-"""
-
 from __future__ import annotations
 
 import json
@@ -9,25 +5,57 @@ import os
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
+# ---------------------------------------------------------------------------
+# Optional dotenv support
+# ---------------------------------------------------------------------------
+
 try:
     from dotenv import load_dotenv
-
+except ImportError:  # only ignore missing library
+    load_dotenv = None
+else:
     load_dotenv(override=True)
-except Exception:
-    # It's okay if python-dotenv is not installed; env vars can be provided
-    # by the surrounding environment.
-    pass
+
+
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+
+PAYLINK_API_KEY_HEADER = "PAYLINK_API_KEY"
+PAYLINK_PROJECT_HEADER = "PAYLINK_PROJECT"
+PAYLINK_TRACING_HEADER = "PAYLINK_TRACING"
+PAYMENT_PROVIDER_HEADER = "PAYMENT_PROVIDER"
+
+DEFAULT_REQUIRED_HEADERS: List[str] = [
+    PAYLINK_API_KEY_HEADER,
+    PAYLINK_PROJECT_HEADER,
+    PAYLINK_TRACING_HEADER,
+    PAYMENT_PROVIDER_HEADER,
+]
+
+MPESA_ENV_KEYS = {
+    "MPESA_BUSINESS_SHORTCODE": "business_shortcode",
+    "MPESA_CONSUMER_SECRET": "consumer_secret",
+    "MPESA_CONSUMER_KEY": "consumer_key",
+    "MPESA_CALLBACK_URL": "callback_url",
+    "MPESA_PASSKEY": "passkey",
+    "MPESA_BASE_URL": "base_url",
+}
 
 
 def _normalise_payment_providers(providers: Optional[List[str]]) -> List[str]:
     if not providers:
         return []
-    return [str(provider).strip() for provider in providers if str(provider).strip()]
+    return [str(p).strip() for p in providers if str(p).strip()]
 
 
 def _is_mpesa_enabled(providers: List[str]) -> bool:
-    return any(provider.lower() == "mpesa" for provider in providers)
+    return any(p.lower() == "mpesa" for p in providers)
 
+
+# ---------------------------------------------------------------------------
+# M-Pesa config
+# ---------------------------------------------------------------------------
 
 @dataclass(frozen=True)
 class MpesaSettings:
@@ -39,78 +67,94 @@ class MpesaSettings:
     base_url: Optional[str]
 
     @classmethod
-    def from_environment(cls) -> "MpesaSettings":
-        return cls(
-            business_shortcode=os.getenv("MPESA_BUSINESS_SHORTCODE"),
-            consumer_secret=os.getenv("MPESA_CONSUMER_SECRET"),
-            consumer_key=os.getenv("MPESA_CONSUMER_KEY"),
-            callback_url=os.getenv("MPESA_CALLBACK_URL"),
-            passkey=os.getenv("MPESA_PASSKEY"),
-            base_url=os.getenv("MPESA_BASE_URL"),
-        )
+    def from_environment(cls) -> MpesaSettings:
+        kwargs = {
+            attr_name: os.getenv(env_key)
+            for env_key, attr_name in MPESA_ENV_KEYS.items()
+        }
+        return cls(**kwargs)  # type: ignore[arg-type]
 
     def ensure_complete(self) -> None:
         missing = [
-            name
-            for name, value in {
-                "MPESA_BUSINESS_SHORTCODE": self.business_shortcode,
-                "MPESA_CONSUMER_SECRET": self.consumer_secret,
-                "MPESA_CONSUMER_KEY": self.consumer_key,
-                "MPESA_CALLBACK_URL": self.callback_url,
-                "MPESA_PASSKEY": self.passkey,
-                "MPESA_BASE_URL": self.base_url,
-            }.items()
-            if not value
+            env_key
+            for env_key, attr_name in MPESA_ENV_KEYS.items()
+            if getattr(self, attr_name) in (None, "")
         ]
         if missing:
             raise ValueError(f"Missing M-Pesa settings: {', '.join(missing)}")
 
     def as_headers(self) -> Dict[str, str]:
         headers: Dict[str, str] = {}
-        if self.business_shortcode:
-            headers["MPESA_BUSINESS_SHORTCODE"] = self.business_shortcode
-        if self.consumer_secret:
-            headers["MPESA_CONSUMER_SECRET"] = self.consumer_secret
-        if self.consumer_key:
-            headers["MPESA_CONSUMER_KEY"] = self.consumer_key
-        if self.callback_url:
-            headers["MPESA_CALLBACK_URL"] = self.callback_url
-        if self.passkey:
-            headers["MPESA_PASSKEY"] = self.passkey
-        if self.base_url:
-            headers["MPESA_BASE_URL"] = self.base_url
+        for env_key, attr_name in MPESA_ENV_KEYS.items():
+            value = getattr(self, attr_name)
+            if value:
+                headers[env_key] = value
         return headers
 
     def as_dict(self) -> Dict[str, Optional[str]]:
         return {
-            "MPESA_BUSINESS_SHORTCODE": self.business_shortcode,
-            "MPESA_CONSUMER_SECRET": self.consumer_secret,
-            "MPESA_CONSUMER_KEY": self.consumer_key,
-            "MPESA_CALLBACK_URL": self.callback_url,
-            "MPESA_PASSKEY": self.passkey,
-            "MPESA_BASE_URL": self.base_url,
+            env_key: getattr(self, attr_name)
+            for env_key, attr_name in MPESA_ENV_KEYS.items()
         }
 
 
-DEFAULT_REQUIRED_HEADERS = [
-    "PAYLINK_API_KEY",
-    "PAYLINK_PROJECT",
-    "PAYLINK_TRACING",
-    "PAYMENT_PROVIDER",
-]
+# ---------------------------------------------------------------------------
+# Monetization config
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class MonetizationSettings:
+    wallet_connection_string: str
+    transport: str
+
+    @staticmethod
+    def ensure(
+        *,
+        wallet_connection_string: str,
+        transport: str,
+    ) -> MonetizationSettings:
+        if not wallet_connection_string:
+            raise ValueError("`wallet_connection_string` is required for monetization.")
+        if not transport:
+            raise ValueError("`transport` is required for monetization.")
+        return MonetizationSettings(
+            wallet_connection_string=wallet_connection_string,
+            transport=transport,
+        )
+
+    def as_headers(self) -> Dict[str, str]:
+        return {
+            "WALLET_CONNECTION_STRING": self.wallet_connection_string,
+            "MONETIZATION_TRANSPORT": self.transport,
+        }
+
+    def as_dict(self) -> Dict[str, str]:
+        return {
+            "WALLET_CONNECTION_STRING": self.wallet_connection_string,
+            "MONETIZATION_TRANSPORT": self.transport,
+        }
+
+    def required_headers(self) -> List[str]:
+        return ["WALLET_CONNECTION_STRING", "MONETIZATION_TRANSPORT"]
 
 
-@dataclass
+# ---------------------------------------------------------------------------
+# Main PayLink config
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
 class PayLinkConfig:
     base_url: str
     api_key: Optional[str]
     tracing: Optional[str]
     project: Optional[str]
     payment_provider: List[str] = field(default_factory=list)
-    required_headers: Optional[List[str]] = field(default_factory=list)
+    required_headers: List[str] = field(default_factory=lambda: DEFAULT_REQUIRED_HEADERS.copy())
     headers: Dict[str, str] = field(default_factory=dict)
     mpesa_settings: Optional[MpesaSettings] = None
-    monitization_settings: Optional["MonitizationSettings"] = None
+    monetization_settings: Optional[MonetizationSettings] = None
+
+    # --------- Construction helpers ---------
 
     @classmethod
     def resolve(
@@ -122,42 +166,49 @@ class PayLinkConfig:
         project: Optional[str],
         payment_provider: Optional[List[str]],
         required_headers: Optional[List[str]],
-    ) -> "PayLinkConfig":
-        resolved_api_key = api_key or os.getenv("PAYLINK_API_KEY")
-        resolved_tracing = (tracing or os.getenv("PAYLINK_TRACING") or "").strip()
-        resolved_project = project or os.getenv("PAYLINK_PROJECT")
+    ) -> PayLinkConfig:
+        resolved_api_key = api_key or os.getenv(PAYLINK_API_KEY_HEADER)
+        resolved_tracing = (tracing or os.getenv(PAYLINK_TRACING_HEADER) or "").strip()
+        resolved_project = project or os.getenv(PAYLINK_PROJECT_HEADER)
         resolved_payment_provider = (
             _normalise_payment_providers(payment_provider)
             if payment_provider is not None
             else cls._providers_from_environment()
         )
 
-        config = cls(
+        mpesa_settings: Optional[MpesaSettings] = None
+        if _is_mpesa_enabled(resolved_payment_provider):
+            mpesa_settings = MpesaSettings.from_environment()
+            mpesa_settings.ensure_complete()
+
+        monetization_settings: Optional[MonetizationSettings] = None
+
+        headers = cls._build_headers(
+            api_key=resolved_api_key,
+            tracing=resolved_tracing,
+            project=resolved_project,
+            payment_provider=resolved_payment_provider,
+            mpesa_settings=mpesa_settings,
+            monetization_settings=monetization_settings,
+        )
+
+        return cls(
             base_url=base_url,
             api_key=resolved_api_key,
             tracing=resolved_tracing,
             project=resolved_project,
             payment_provider=resolved_payment_provider,
             required_headers=(
-                required_headers
-                if required_headers is not None
-                else DEFAULT_REQUIRED_HEADERS.copy()
+                required_headers if required_headers is not None else DEFAULT_REQUIRED_HEADERS.copy()
             ),
+            headers=headers,
+            mpesa_settings=mpesa_settings,
+            monetization_settings=monetization_settings,
         )
-
-        config.mpesa_settings = None
-        config.monitization_settings = None
-        if _is_mpesa_enabled(config.payment_provider):
-            mpesa_settings = MpesaSettings.from_environment()
-            mpesa_settings.ensure_complete()
-            config.mpesa_settings = mpesa_settings
-
-        config.headers = config._build_headers()
-        return config
 
     @staticmethod
     def _providers_from_environment() -> List[str]:
-        payload = os.getenv("PAYMENT_PROVIDER", "[]")
+        payload = os.getenv(PAYMENT_PROVIDER_HEADER, "[]")
         try:
             parsed = json.loads(payload)
         except json.JSONDecodeError:
@@ -166,97 +217,77 @@ class PayLinkConfig:
             return _normalise_payment_providers(parsed)
         return []
 
-    def _build_headers(self) -> Dict[str, str]:
+    @staticmethod
+    def _build_headers(
+        *,
+        api_key: Optional[str],
+        tracing: Optional[str],
+        project: Optional[str],
+        payment_provider: List[str],
+        mpesa_settings: Optional[MpesaSettings],
+        monetization_settings: Optional[MonetizationSettings],
+    ) -> Dict[str, str]:
         headers: Dict[str, str] = {}
 
-        if self.api_key:
-            headers["PAYLINK_API_KEY"] = self.api_key
-        if self.tracing and self.tracing.lower() == "enabled":
-            headers["PAYLINK_TRACING"] = "enabled"
-        if self.project:
-            headers["PAYLINK_PROJECT"] = self.project
-        if self.payment_provider:
-            headers["PAYMENT_PROVIDER"] = json.dumps(self.payment_provider)
+        if api_key:
+            headers[PAYLINK_API_KEY_HEADER] = api_key
+        if tracing and tracing.lower() == "enabled":
+            headers[PAYLINK_TRACING_HEADER] = "enabled"
+        if project:
+            headers[PAYLINK_PROJECT_HEADER] = project
+        if payment_provider:
+            headers[PAYMENT_PROVIDER_HEADER] = json.dumps(payment_provider)
 
-        if self.mpesa_settings:
-            headers.update(self.mpesa_settings.as_headers())
-        if self.monitization_settings:
-            headers.update(self.monitization_settings.as_headers())
+        if mpesa_settings:
+            headers.update(mpesa_settings.as_headers())
+        if monetization_settings:
+            headers.update(monetization_settings.as_headers())
 
         return headers
 
+    # --------- Convenience accessors ---------
+
     def mpesa_settings_dict(self) -> Dict[str, Optional[str]]:
-        if not self.mpesa_settings:
-            return {}
-        return self.mpesa_settings.as_dict()
+        return self.mpesa_settings.as_dict() if self.mpesa_settings else {}
 
-    def monitization_settings_dict(self) -> Dict[str, str]:
-        if not self.monitization_settings:
-            return {}
-        return self.monitization_settings.as_dict()
+    def monetization_settings_dict(self) -> Dict[str, str]:
+        return self.monetization_settings.as_dict() if self.monetization_settings else {}
 
-    def with_monitization(
+    # --------- Immutable "with_*" helpers ---------
+
+    def with_monetization(
         self,
         *,
         wallet_connection_string: str,
         transport: str,
         required: Optional[List[str]] = None,
-    ) -> "PayLinkConfig":
-        settings = MonitizationSettings.ensure(
+    ) -> PayLinkConfig:
+        settings = MonetizationSettings.ensure(
             wallet_connection_string=wallet_connection_string,
             transport=transport,
         )
 
-        self.monitization_settings = settings
-        if self.required_headers is not None:
-            required_headers = self.required_headers.copy()
-            required_headers.extend(
-                header for header in settings.required_headers() if header not in required_headers
-            )
-            if required:
-                required_headers.extend(
-                    header for header in required if header not in required_headers
-                )
-            self.required_headers = required_headers
+        # merge required headers
+        required_headers = list(self.required_headers)
+        for header in settings.required_headers():
+            if header not in required_headers:
+                required_headers.append(header)
+        if required:
+            for header in required:
+                if header not in required_headers:
+                    required_headers.append(header)
 
-        self.headers.update(settings.as_headers())
-        return self
+        headers = dict(self.headers)
+        headers.update(settings.as_headers())
 
-
-@dataclass(frozen=True)
-class MonitizationSettings:
-    wallet_connection_string: str
-    transport: str
-
-    @staticmethod
-    def ensure(
-        *,
-        wallet_connection_string: str,
-        transport: str,
-    ) -> "MonitizationSettings":
-        if not wallet_connection_string:
-            raise ValueError(
-                "`wallet_connection_string` is required when configuring monetization."
-            )
-        if not transport:
-            raise ValueError("`transport` is required when configuring monetization.")
-        return MonitizationSettings(
-            wallet_connection_string=wallet_connection_string,
-            transport=transport,
+        return PayLinkConfig(
+            base_url=self.base_url,
+            api_key=self.api_key,
+            tracing=self.tracing,
+            project=self.project,
+            payment_provider=list(self.payment_provider),
+            required_headers=required_headers,
+            headers=headers,
+            mpesa_settings=self.mpesa_settings,
+            monetization_settings=settings,
         )
-
-    def as_headers(self) -> Dict[str, str]:
-        return {
-            "WALLET_CONNECTION_STRING": self.wallet_connection_string,
-            "MONITIZATION_TRANSPORT": self.transport,
-        }
-
-    def as_dict(self) -> Dict[str, str]:
-        return {
-            "WALLET_CONNECTION_STRING": self.wallet_connection_string,
-            "MONITIZATION_TRANSPORT": self.transport,
-        }
-
-    def required_headers(self) -> List[str]:
-        return ["WALLET_CONNECTION_STRING", "MONITIZATION_TRANSPORT"]
-

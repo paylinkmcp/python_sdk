@@ -70,6 +70,38 @@ if __name__ == "__main__":
     asyncio.run(use_custom_mcp_adapter())
 ```
 
+### Synchronous usage
+
+If you are working in an environment without `asyncio`, the SDK now exposes synchronous wrappers that internally drive the event loop for you:
+
+```python
+from paylink import MpesaTools
+
+
+def list_and_charge():
+    client = MpesaTools()
+
+    tools = client.list_tools_sync()
+    print("Available tools:", [tool.name for tool in tools])
+
+    response = client.call_tool_sync(
+        "stk_push",
+        {
+            "amount": "100",
+            "phone_number": "254712345678",
+            "account_reference": "ORDER123",
+            "transaction_desc": "Payment",
+        },
+    )
+    print(response)
+
+
+if __name__ == "__main__":
+    list_and_charge()
+```
+
+> **Note:** The synchronous helpers cannot be used when an event loop is already running (for example, inside an async web framework). Switch to the async methods in those environments.
+
 ## API Reference
 
 ### PayLink Class
@@ -104,6 +136,30 @@ Call a specific tool exposed by the MCP server.
 - `Any`: The result from the tool execution
 
 ## Examples
+
+### LangChain usage
+
+```python
+import asyncio
+from langchain.agents import create_agent
+from langchain_openai import ChatOpenAI
+from paylink.langchain.tools import MpesaTools
+
+
+async def build_agent():
+    mpesa_tools = MpesaTools()
+    tools = await mpesa_tools.list_tools()  # returns LangChain Tool objects
+
+    llm = ChatOpenAI(model="gpt-4o-mini")
+    agent = create_agent(model=llm, tools=tools)
+    result = await agent.ainvoke("Charge 100 KES to 254712345678 for ORDER123")
+    print(result)
+
+
+asyncio.run(build_agent())
+```
+
+If you prefer to work with OpenAI-style JSON schemas (for example `ChatOpenAI.bind_tools`), use `await mpesa_tools.list_tool_specs()` instead.
 
 ### STK Push Payment
 
