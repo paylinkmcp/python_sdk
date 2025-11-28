@@ -26,6 +26,9 @@ PAYLINK_PROJECT_HEADER = "PAYLINK_PROJECT"
 PAYLINK_TRACING_HEADER = "PAYLINK_TRACING"
 PAYMENT_PROVIDER_HEADER = "PAYMENT_PROVIDER"
 
+# Monetization-related env key / header
+WALLET_CONNECTION_ENV = "WALLET_CONNECTION_STRING"
+
 DEFAULT_REQUIRED_HEADERS: List[str] = [
     PAYLINK_API_KEY_HEADER,
     PAYLINK_PROJECT_HEADER,
@@ -105,37 +108,30 @@ class MpesaSettings:
 @dataclass(frozen=True)
 class MonetizationSettings:
     wallet_connection_string: str
-    transport: str
 
     @staticmethod
     def ensure(
         *,
         wallet_connection_string: str,
-        transport: str,
     ) -> MonetizationSettings:
         if not wallet_connection_string:
             raise ValueError("`wallet_connection_string` is required for monetization.")
-        if not transport:
-            raise ValueError("`transport` is required for monetization.")
         return MonetizationSettings(
             wallet_connection_string=wallet_connection_string,
-            transport=transport,
         )
 
     def as_headers(self) -> Dict[str, str]:
         return {
             "WALLET_CONNECTION_STRING": self.wallet_connection_string,
-            "MONETIZATION_TRANSPORT": self.transport,
         }
 
     def as_dict(self) -> Dict[str, str]:
         return {
             "WALLET_CONNECTION_STRING": self.wallet_connection_string,
-            "MONETIZATION_TRANSPORT": self.transport,
         }
 
     def required_headers(self) -> List[str]:
-        return ["WALLET_CONNECTION_STRING", "MONETIZATION_TRANSPORT"]
+        return ["WALLET_CONNECTION_STRING"]
 
 
 # ---------------------------------------------------------------------------
@@ -149,7 +145,9 @@ class PayLinkConfig:
     tracing: Optional[str]
     project: Optional[str]
     payment_provider: List[str] = field(default_factory=list)
-    required_headers: List[str] = field(default_factory=lambda: DEFAULT_REQUIRED_HEADERS.copy())
+    required_headers: List[str] = field(
+        default_factory=lambda: DEFAULT_REQUIRED_HEADERS.copy()
+    )
     headers: Dict[str, str] = field(default_factory=dict)
     mpesa_settings: Optional[MpesaSettings] = None
     monetization_settings: Optional[MonetizationSettings] = None
@@ -166,22 +164,40 @@ class PayLinkConfig:
         project: Optional[str],
         payment_provider: Optional[List[str]],
         required_headers: Optional[List[str]],
+        auto_monetization_from_env: bool = True,
     ) -> PayLinkConfig:
+        """
+        Resolve a PayLinkConfig from explicit arguments and environment variables.
+
+        If auto_monetization_from_env is True and WALLET_CONNECTION_STRING is set
+        in the environment, monetization headers will be automatically added and
+        monetization_settings populated.
+        """
+        # Core PayLink headers
         resolved_api_key = api_key or os.getenv(PAYLINK_API_KEY_HEADER)
         resolved_tracing = (tracing or os.getenv(PAYLINK_TRACING_HEADER) or "").strip()
         resolved_project = project or os.getenv(PAYLINK_PROJECT_HEADER)
+
         resolved_payment_provider = (
             _normalise_payment_providers(payment_provider)
             if payment_provider is not None
             else cls._providers_from_environment()
         )
 
+        # M-Pesa config (optional)
         mpesa_settings: Optional[MpesaSettings] = None
         if _is_mpesa_enabled(resolved_payment_provider):
             mpesa_settings = MpesaSettings.from_environment()
             mpesa_settings.ensure_complete()
 
+        # Monetization config (optional, from env)
         monetization_settings: Optional[MonetizationSettings] = None
+        if auto_monetization_from_env:
+            wallet_conn = os.getenv(WALLET_CONNECTION_ENV)
+            if wallet_conn:
+                monetization_settings = MonetizationSettings.ensure(
+                    wallet_connection_string=wallet_conn,
+                )
 
         headers = cls._build_headers(
             api_key=resolved_api_key,
@@ -192,15 +208,24 @@ class PayLinkConfig:
             monetization_settings=monetization_settings,
         )
 
+        # Merge required headers (include monetization headers if present)
+        final_required_headers = (
+            required_headers
+            if required_headers is not None
+            else DEFAULT_REQUIRED_HEADERS.copy()
+        )
+        if monetization_settings:
+            for header in monetization_settings.required_headers():
+                if header not in final_required_headers:
+                    final_required_headers.append(header)
+
         return cls(
             base_url=base_url,
             api_key=resolved_api_key,
             tracing=resolved_tracing,
             project=resolved_project,
             payment_provider=resolved_payment_provider,
-            required_headers=(
-                required_headers if required_headers is not None else DEFAULT_REQUIRED_HEADERS.copy()
-            ),
+            required_headers=final_required_headers,
             headers=headers,
             mpesa_settings=mpesa_settings,
             monetization_settings=monetization_settings,
@@ -259,12 +284,16 @@ class PayLinkConfig:
         self,
         *,
         wallet_connection_string: str,
-        transport: str,
         required: Optional[List[str]] = None,
     ) -> PayLinkConfig:
+        """
+        Return a new PayLinkConfig with monetization enabled/overridden.
+
+        This is useful if you want to programmatically set monetization even if
+        WALLET_CONNECTION_STRING is not (or differently) set in the environment.
+        """
         settings = MonetizationSettings.ensure(
             wallet_connection_string=wallet_connection_string,
-            transport=transport,
         )
 
         # merge required headers

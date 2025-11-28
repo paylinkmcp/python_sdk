@@ -3,7 +3,7 @@ LangChain integration for PayLink.
 
 Usage:
 
-    from paylink.intergrations.langchain_tools import PayLinkTools
+    from paylink.integrations.langchain_tools import PayLinkTools
 
     llm = init_chat_model(model="gpt-4o-mini", temperature=0)
     paylink_client = PayLinkTools(api_key="...")
@@ -28,7 +28,7 @@ def _get_structured_tool_cls():
         return getattr(module, "StructuredTool")
     except ImportError as exc:  # pragma: no cover - optional dependency
         raise ImportError(
-            "langchain-core is required to use paylink.intergrations.langchain_tools. "
+            "langchain-core is required to use paylink.integrations.langchain_tools. "
             "Install it with `pip install langchain-core`."
         ) from exc
 
