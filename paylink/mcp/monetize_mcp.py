@@ -35,11 +35,13 @@ load_dotenv(override=True)
 logger = logging.getLogger(__name__)
 
 # Default wallet API base URL, can be overridden by env if needed.
-# DEFAULT_WALLET_BASE_URL = "https://wallet.paylinkai.app"
-DEFAULT_WALLET_BASE_URL = "http://localhost:3001"
+# Production default - can be overridden via PAYMENT_WALLET_BASE_URL environment variable
+# or by creating a .env file with PAYMENT_WALLET_BASE_URL=http://localhost:3001
+DEFAULT_WALLET_BASE_URL = "https://wallet.paylinkai.app"
 
 # Default evaluator base URL
-# DEFAULT_EVALUATOR_BASE_URL = "http://127.0.0.1:2024"
+# Production default - can be overridden via EVALUATOR_BASE_URL environment variable
+# or by creating a .env file with EVALUATOR_BASE_URL=http://127.0.0.1:2024
 DEFAULT_EVALUATOR_BASE_URL = "https://evaluator.paylinkai.app"
 
 MCP_WALLET_CONNECTION_STRING = "MCP_WALLET_CONNECTION_STRING"
