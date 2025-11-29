@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "paylink"
-version = "0.4.0"
+version = "0.4.1"
 description = "Python SDK for interacting with PayLink MCP servers"
 readme = "README.md"
 license = { file = "LICENSE" }
